@@ -1,0 +1,12 @@
+{
+  "domain": "fronius_meter_emulator",
+  "name": "Fronius Smart Meter Emulator",
+  "codeowners": ["@your-github-username"],
+  "config_flow": true,
+  "documentation": "https://github.com/your-github-username/fronius_meter_emulator",
+  "integration_type": "hub",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/your-github-username/fronius_meter_emulator/issues",
+  "requirements": ["pymodbus==3.8.6"],
+  "version": "0.1.0"
+}
