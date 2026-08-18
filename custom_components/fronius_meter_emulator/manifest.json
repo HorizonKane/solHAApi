@@ -7,6 +7,6 @@
   "integration_type": "hub",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/your-github-username/fronius_meter_emulator/issues",
-  "requirements": ["pymodbus==3.8.6"],
+  "requirements": ["pymodbus>=3.6.0,<4"],
   "version": "0.1.0"
 }
