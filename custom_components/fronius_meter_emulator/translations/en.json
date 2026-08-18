@@ -1,0 +1,55 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Fronius Smart Meter Emulator",
+        "description": "Connect to the Fronius inverter/Datamanager's Solar API.",
+        "data": {
+          "host": "Host / IP address of the Fronius inverter or Datamanager",
+          "serial_number": "Serial number to report as the emulated meter",
+          "listen_port": "Modbus TCP port to listen on"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Could not reach the Fronius Solar API at this host."
+    },
+    "abort": {
+      "already_configured": "This Fronius host is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "scan_interval": "Polling interval (seconds)",
+          "listen_host": "Bind address for the Modbus TCP server",
+          "listen_port": "Modbus TCP port to listen on",
+          "power_source": "Value to report to the wallbox",
+          "invert_sign": "Invert sign (report generation as export)"
+        }
+      }
+    }
+  },
+  "selector": {
+    "power_source": {
+      "options": {
+        "P_PV": "PV generation (P_PV)",
+        "P_Grid": "Grid power (P_Grid)"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "pv_power": {
+        "name": "PV power"
+      },
+      "grid_power": {
+        "name": "Grid power"
+      },
+      "load_power": {
+        "name": "Load power"
+      }
+    }
+  }
+}
