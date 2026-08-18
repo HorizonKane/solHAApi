@@ -1,89 +1,77 @@
 """The Fronius Smart Meter Emulator integration."""
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_HOST, Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, EventStateChangedData, HomeAssistant, State, callback
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers.event import async_track_state_change_event
 
-from .const import (
-    CONF_INVERT_SIGN,
-    CONF_LISTEN_HOST,
-    CONF_LISTEN_PORT,
-    CONF_POWER_SOURCE,
-    CONF_SERIAL_NUMBER,
-    DEFAULT_INVERT_SIGN,
-    DEFAULT_LISTEN_HOST,
-    DEFAULT_LISTEN_PORT,
-    DEFAULT_SCAN_INTERVAL,
-    DEFAULT_SERIAL_NUMBER,
-    DOMAIN,
-    POWER_SOURCE_PV,
-)
-from .coordinator import FroniusSolarApiCoordinator
-from .modbus_server import FroniusSmartMeterServer
+from .const import CONF_LISTEN_HOST, CONF_LISTEN_PORT, CONF_SOURCE_ENTITY, DEFAULT_LISTEN_HOST, DEFAULT_LISTEN_PORT
+from .solar_api_server import FroniusSolarApiServer
 
-PLATFORMS = [Platform.SENSOR]
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass
 class FroniusMeterEmulatorData:
     """Runtime data stored on the config entry."""
 
-    coordinator: FroniusSolarApiCoordinator
-    meter_server: FroniusSmartMeterServer
+    server: FroniusSolarApiServer
 
 
 FroniusMeterEmulatorConfigEntry = ConfigEntry[FroniusMeterEmulatorData]
+
+
+def _state_to_watts(state: State | None) -> float:
+    """Convert a source entity's state to a power value in watts."""
+    if state is None or state.state in ("unknown", "unavailable"):
+        return 0.0
+    try:
+        value = float(state.state)
+    except ValueError:
+        return 0.0
+    unit = state.attributes.get("unit_of_measurement", "W")
+    if unit == "kW":
+        value *= 1000
+    return value
 
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: FroniusMeterEmulatorConfigEntry
 ) -> bool:
     """Set up Fronius Smart Meter Emulator from a config entry."""
-    options = entry.options
-    host = entry.data[CONF_HOST]
-    scan_interval = options.get("scan_interval", DEFAULT_SCAN_INTERVAL)
-    listen_host = options.get(CONF_LISTEN_HOST, DEFAULT_LISTEN_HOST)
-    listen_port = options.get(CONF_LISTEN_PORT, DEFAULT_LISTEN_PORT)
-    serial_number = entry.data.get(CONF_SERIAL_NUMBER, DEFAULT_SERIAL_NUMBER)
-    power_source = options.get(CONF_POWER_SOURCE, POWER_SOURCE_PV)
-    invert_sign = options.get(CONF_INVERT_SIGN, DEFAULT_INVERT_SIGN)
+    source_entity = entry.data[CONF_SOURCE_ENTITY]
+    listen_host = entry.options.get(CONF_LISTEN_HOST, DEFAULT_LISTEN_HOST)
+    listen_port = entry.options.get(CONF_LISTEN_PORT, DEFAULT_LISTEN_PORT)
 
-    coordinator = FroniusSolarApiCoordinator(hass, host, scan_interval)
-    await coordinator.async_config_entry_first_refresh()
+    server = FroniusSolarApiServer(listen_host, listen_port)
+    server.update_pv_power(_state_to_watts(hass.states.get(source_entity)))
 
-    meter_server = FroniusSmartMeterServer(listen_host, listen_port, serial_number)
     try:
-        await meter_server.async_start()
+        await server.async_start()
     except OSError as err:
         raise ConfigEntryNotReady(str(err)) from err
 
-    def _push_reading() -> None:
-        value = coordinator.data.get(power_source, 0.0)
-        if invert_sign:
-            value = -value
-        meter_server.update_power(value)
+    @callback
+    def _handle_state_change(event: Event[EventStateChangedData]) -> None:
+        server.update_pv_power(_state_to_watts(event.data["new_state"]))
 
-    _push_reading()
-    remove_listener = coordinator.async_add_listener(_push_reading)
-
-    entry.runtime_data = FroniusMeterEmulatorData(
-        coordinator=coordinator, meter_server=meter_server
+    entry.async_on_unload(
+        async_track_state_change_event(hass, [source_entity], _handle_state_change)
     )
-    entry.async_on_unload(remove_listener)
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
 
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    entry.runtime_data = FroniusMeterEmulatorData(server=server)
     return True
 
 
 async def _async_reload_entry(
     hass: HomeAssistant, entry: FroniusMeterEmulatorConfigEntry
 ) -> None:
-    """Reload the config entry when options change (e.g. port, scan interval)."""
+    """Reload the config entry when options change (e.g. listen host/port)."""
     await hass.config_entries.async_reload(entry.entry_id)
 
 
@@ -91,7 +79,5 @@ async def async_unload_entry(
     hass: HomeAssistant, entry: FroniusMeterEmulatorConfigEntry
 ) -> bool:
     """Unload a config entry."""
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    if unload_ok:
-        await entry.runtime_data.meter_server.async_stop()
-    return unload_ok
+    await entry.runtime_data.server.async_stop()
+    return True

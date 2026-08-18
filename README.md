@@ -1,27 +1,31 @@
 # Fronius Smart Meter Emulator (Home Assistant Custom Integration)
 
-Liest die aktuelle PV-Erzeugung eines Fronius-Wechselrichters über die **Fronius
-Solar API** aus und stellt sie über einen emulierten **Fronius Smart Meter**
-(Modbus TCP, SunSpec Model 213) im Netzwerk bereit. Die Fronius Wallbox (z. B.
-Flex Home 22) verbindet sich wie mit einem echten Smart Meter und kann so
-PV-geführt laden, ohne dass ein physischer Zähler vorhanden sein muss.
+Stellt den aktuellen Wert einer bereits in Home Assistant vorhandenen
+PV-Erzeugungs-Entity (z. B. eines Template-Sensors/Helpers) über einen
+emulierten **Fronius Solar API HTTP-Server** im Netzwerk bereit. Die Fronius
+Wallbox (z. B. Flex Home 22) kann darauf wie auf einen echten Fronius
+Datamanager zugreifen und PV-geführt laden – auch ohne dass ein Fronius
+Wechselrichter vorhanden ist.
 
-> ⚠️ Dies ist eine inoffizielle, community-basierte Nachbildung des Fronius
-> Smart-Meter-Protokolls (SunSpec Modbus Map, Model 213). Es besteht keine
-> Verbindung zu oder Unterstützung durch die Fronius International GmbH. Vor dem
-> produktiven Einsatz unbedingt mit der eigenen Wallbox/dem eigenen
-> Datamanager testen.
+> ⚠️ Dies ist eine inoffizielle, community-basierte Nachbildung der lokalen
+> Fronius Solar API auf Basis der öffentlich dokumentierten JSON-Struktur. Es
+> besteht keine Verbindung zu oder Unterstützung durch die Fronius
+> International GmbH. Unbedingt vor dem produktiven Einsatz mit der eigenen
+> Wallbox testen – siehe Hinweis "Bekannte Unsicherheiten" unten.
 
 ## Funktionsweise
 
-1. Ein `DataUpdateCoordinator` fragt periodisch
-   `http://<Fronius-Host>/solar_api/v1/GetPowerFlowRealtimeData.fcgi` ab.
-2. Der ausgewählte Wert (`P_PV` oder `P_Grid`) wird in die entsprechenden
-   SunSpec-Register (u. a. `Total Real Power`, Register 40097) eines
-   simulierten dreiphasigen Smart Meters geschrieben.
-3. Ein integrierter Modbus-TCP-Server hält diese Register bereit. Die Wallbox
-   (oder der Datamanager) wird als "Zähler via Modbus TCP" auf die IP der
-   Home-Assistant-Instanz und den konfigurierten Port konfiguriert.
+1. Sie wählen bei der Einrichtung eine bestehende Home-Assistant-Entity aus,
+   die die aktuelle PV-Erzeugungsleistung liefert (z. B. ein Template-Sensor,
+   der aus vorhandenen Werten berechnet wird).
+2. Die Integration reagiert auf Zustandsänderungen dieser Entity (kein
+   Polling) und hält den Wert für einen eingebauten HTTP-Server bereit.
+3. Der HTTP-Server beantwortet Anfragen unter denselben Pfaden wie ein echter
+   Fronius Datamanager:
+   - `GET /solar_api/GetAPIVersion.cgi`
+   - `GET /solar_api/v1/GetPowerFlowRealtimeData.fcgi` (liefert `Body.Data.Site.P_PV`)
+4. Die Wallbox wird so konfiguriert, dass sie die IP der Home-Assistant-Instanz
+   (und den gewählten Port) als Datenquelle verwendet.
 
 ## Installation
 
@@ -38,53 +42,34 @@ der Home-Assistant-Konfiguration kopieren und Home Assistant neu starten.
 
 1. Einstellungen → Geräte & Dienste → Integration hinzufügen → "Fronius Smart
    Meter Emulator".
-2. Host/IP des Fronius Wechselrichters bzw. Datamanagers angeben (dort muss
-   die Solar API erreichbar sein, standardmäßig ist sie das).
-3. Modbus-TCP-Port für den emulierten Zähler wählen (Standard: `1502`, siehe
-   Hinweis zu Port 502 unten).
-4. Auf der Wallbox bzw. im Fronius Datamanager unter den Zähler-Einstellungen
-   "Zähler via Modbus TCP" mit der IP der Home-Assistant-Instanz und dem
-   gewählten Port eintragen.
+2. Die Entity auswählen, die Ihre PV-Erzeugungsleistung enthält (Einheit `W`
+   oder `kW`, beides wird automatisch umgerechnet).
+3. HTTP-Port wählen (Standard: `8080`).
+4. Auf der Wallbox die IP der Home-Assistant-Instanz (ggf. mit Port, falls die
+   Wallbox das unterstützt) als Fronius-Datenquelle eintragen.
 
-Über die Optionen der Integration lassen sich später anpassen: Abfrageintervall,
-Bind-Adresse/Port des Modbus-Servers, Quelle (`P_PV`/`P_Grid`) und Vorzeichen.
+Über die Optionen der Integration lassen sich Bind-Adresse und Port später
+anpassen.
 
-## Hinweis zu Port 502
+## Bekannte Unsicherheiten
 
-Fronius-Geräte adressieren Zähler standardmäßig auf Modbus-Port `502`. Dieser
-Port ist privilegiert (< 1024) und lässt sich je nach Home-Assistant-Setup
-(Container-Rechte) nicht immer direkt binden. Die Integration verwendet daher
-standardmäßig Port `1502` – die meisten Fronius-Geräte erlauben, bei der
-Zähler-Konfiguration einen abweichenden Port anzugeben. Falls nicht, kann per
-Portweiterleitung (z. B. `iptables`/Router) von `502` auf `1502` umgeleitet
-werden, oder Home Assistant mit der Fähigkeit `CAP_NET_BIND_SERVICE` bzw. als
-root betrieben werden, um Port `502` direkt zu binden.
+Fronius dokumentiert nicht öffentlich, wie genau die Wallbox einen
+Datamanager im lokalen Netz anspricht (z. B. ob zusätzlich zu
+`GetPowerFlowRealtimeData.fcgi` weitere Endpunkte, ein bestimmter Port oder
+eine Discovery per mDNS/UPnP erwartet werden). Diese Integration implementiert
+die zwei am häufigsten benötigten, öffentlich dokumentierten Solar-API-Aufrufe.
 
-## Vorzeichen-Konvention
+**Falls die Wallbox den emulierten Server nicht erkennt:** Bitte den
+tatsächlichen Request der Wallbox mitschneiden (z. B. Netzwerk-Mitschnitt am
+Router, oder die Zugriffe im Home-Assistant-Log/`aiohttp`-Access-Log prüfen)
+und mir den angefragten Pfad mitteilen – dann kann der Server entsprechend
+erweitert werden.
 
-Ein SunSpec-Zähler meldet Leistung mit Vorzeichen: **positiv = Bezug aus dem
-Netz, negativ = Einspeisung/Überschuss**. Die Integration invertiert `P_PV`
-standardmäßig (`invert_sign = true`), damit die volle PV-Erzeugung der Wallbox
-als verfügbarer Überschuss erscheint. Falls stattdessen `P_Grid` (bereits
-vorzeichenrichtig von der Fronius Solar API geliefert) verwendet werden soll,
-Inversion in den Optionen deaktivieren und Verhalten am Hausanschluss
-verifizieren – abhängig von der Fronius-Firmware-Version kann sich die
-Vorzeichenkonvention von `P_Grid` unterscheiden.
+## Registerdaten, die aktuell nicht befüllt werden
 
-## Registerkarte (zur Fehlersuche)
-
-Basis-Adresse `40000` ("SunS"-Marker), Common Block (Model 1) ab `40002`,
-Meter Block (Model 213, float) ab `40069`, Nutzleistung gesamt
-(`Total Real Power`) bei Register `40097`–`40098`. Vollständige Belegung siehe
-[`custom_components/fronius_meter_emulator/sunspec.py`](custom_components/fronius_meter_emulator/sunspec.py).
-
-## Bekannte Einschränkungen
-
-- Spannungen/Frequenz/Leistungsfaktor sind feste Nominalwerte (230 V/400 V,
-  50 Hz, PF 1.0) – die Fronius Solar API liefert keine Phasenwerte.
-- Die Gesamtleistung wird gleichmäßig auf die drei simulierten Phasen
-  aufgeteilt.
-- Energiezähler (Wh-Total) werden aktuell nicht befüllt.
+`P_Grid`, `P_Load`, `P_Akku`, `rel_Autonomy`, `rel_SelfConsumption` sowie die
+Energiezähler werden als `null` gemeldet, da keine entsprechende Datenquelle
+vorhanden ist. Nur `P_PV` wird aus der ausgewählten Entity befüllt.
 
 ## Vor dem Veröffentlichen
 

@@ -3,52 +3,27 @@
     "step": {
       "user": {
         "title": "Fronius Smart Meter Emulator",
-        "description": "Verbindung zur Solar API des Fronius Wechselrichters/Datamanagers.",
+        "description": "Wählen Sie die Home-Assistant-Entity, die Ihre aktuelle PV-Erzeugungsleistung enthält. Dieser Wert wird der Wallbox so bereitgestellt, als käme er von einem Fronius Datamanager.",
         "data": {
-          "host": "Host / IP-Adresse des Fronius Wechselrichters oder Datamanagers",
-          "serial_number": "Seriennummer, die der emulierte Zähler meldet",
-          "listen_port": "Modbus-TCP-Port, auf dem gelauscht wird"
+          "source_entity": "Entity mit PV-Erzeugungsleistung",
+          "listen_port": "HTTP-Port, auf dem gelauscht wird"
         }
       }
     },
     "error": {
-      "cannot_connect": "Die Fronius Solar API konnte unter diesem Host nicht erreicht werden."
+      "entity_not_found": "Diese Entity wurde nicht gefunden."
     },
     "abort": {
-      "already_configured": "Dieser Fronius-Host ist bereits konfiguriert."
+      "already_configured": "Diese Entity ist bereits konfiguriert."
     }
   },
   "options": {
     "step": {
       "init": {
         "data": {
-          "scan_interval": "Abfrageintervall (Sekunden)",
-          "listen_host": "Bind-Adresse für den Modbus-TCP-Server",
-          "listen_port": "Modbus-TCP-Port, auf dem gelauscht wird",
-          "power_source": "Wert, der an die Wallbox gemeldet wird",
-          "invert_sign": "Vorzeichen umkehren (Erzeugung als Einspeisung melden)"
+          "listen_host": "Bind-Adresse für den HTTP-Server",
+          "listen_port": "HTTP-Port, auf dem gelauscht wird"
         }
-      }
-    }
-  },
-  "selector": {
-    "power_source": {
-      "options": {
-        "P_PV": "PV-Erzeugung (P_PV)",
-        "P_Grid": "Netzleistung (P_Grid)"
-      }
-    }
-  },
-  "entity": {
-    "sensor": {
-      "pv_power": {
-        "name": "PV-Leistung"
-      },
-      "grid_power": {
-        "name": "Netzleistung"
-      },
-      "load_power": {
-        "name": "Hausverbrauch"
       }
     }
   }

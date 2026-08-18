@@ -3,52 +3,27 @@
     "step": {
       "user": {
         "title": "Fronius Smart Meter Emulator",
-        "description": "Connect to the Fronius inverter/Datamanager's Solar API.",
+        "description": "Select the Home Assistant entity that holds your current PV production power. Its value will be served to the wallbox as if it came from a Fronius Datamanager.",
         "data": {
-          "host": "Host / IP address of the Fronius inverter or Datamanager",
-          "serial_number": "Serial number to report as the emulated meter",
-          "listen_port": "Modbus TCP port to listen on"
+          "source_entity": "PV production power entity",
+          "listen_port": "HTTP port to listen on"
         }
       }
     },
     "error": {
-      "cannot_connect": "Could not reach the Fronius Solar API at this host."
+      "entity_not_found": "This entity could not be found."
     },
     "abort": {
-      "already_configured": "This Fronius host is already configured."
+      "already_configured": "This entity is already configured."
     }
   },
   "options": {
     "step": {
       "init": {
         "data": {
-          "scan_interval": "Polling interval (seconds)",
-          "listen_host": "Bind address for the Modbus TCP server",
-          "listen_port": "Modbus TCP port to listen on",
-          "power_source": "Value to report to the wallbox",
-          "invert_sign": "Invert sign (report generation as export)"
+          "listen_host": "Bind address for the HTTP server",
+          "listen_port": "HTTP port to listen on"
         }
-      }
-    }
-  },
-  "selector": {
-    "power_source": {
-      "options": {
-        "P_PV": "PV generation (P_PV)",
-        "P_Grid": "Grid power (P_Grid)"
-      }
-    }
-  },
-  "entity": {
-    "sensor": {
-      "pv_power": {
-        "name": "PV power"
-      },
-      "grid_power": {
-        "name": "Grid power"
-      },
-      "load_power": {
-        "name": "Load power"
       }
     }
   }
