@@ -3,10 +3,15 @@
     "step": {
       "user": {
         "title": "Fronius Smart Meter Emulator",
-        "description": "Select the Home Assistant entity that holds your current PV production power. Its value will be served to the wallbox as if it came from a Fronius Datamanager.",
+        "description": "Select the Home Assistant entity that holds your current grid surplus power (negative = exporting/surplus, positive = importing from the grid — enable 'Invert sign' if your entity uses the opposite convention).",
         "data": {
-          "source_entity": "PV production power entity",
-          "listen_port": "HTTP port to listen on"
+          "source_entity": "Surplus power entity",
+          "invert_sign": "Invert sign",
+          "system_name": "Announced system name",
+          "http_port": "HTTP port (Solar API)",
+          "modbus_enabled": "Also emulate a Modbus TCP Smart Meter IP",
+          "modbus_port": "Modbus TCP port",
+          "modbus_unit_id": "Modbus unit/device ID"
         }
       }
     },
@@ -21,8 +26,12 @@
     "step": {
       "init": {
         "data": {
-          "listen_host": "Bind address for the HTTP server",
-          "listen_port": "HTTP port to listen on"
+          "invert_sign": "Invert sign",
+          "system_name": "Announced system name",
+          "http_port": "HTTP port (Solar API)",
+          "modbus_enabled": "Also emulate a Modbus TCP Smart Meter IP",
+          "modbus_port": "Modbus TCP port",
+          "modbus_unit_id": "Modbus unit/device ID"
         }
       }
     }

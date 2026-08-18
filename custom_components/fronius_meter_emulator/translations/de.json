@@ -3,10 +3,15 @@
     "step": {
       "user": {
         "title": "Fronius Smart Meter Emulator",
-        "description": "Wählen Sie die Home-Assistant-Entity, die Ihre aktuelle PV-Erzeugungsleistung enthält. Dieser Wert wird der Wallbox so bereitgestellt, als käme er von einem Fronius Datamanager.",
+        "description": "Wählen Sie die Home-Assistant-Entity mit Ihrem aktuellen Netz-Überschusswert (negativ = Einspeisung/Überschuss, positiv = Bezug aus dem Netz – aktivieren Sie 'Vorzeichen umkehren', falls Ihre Entity die umgekehrte Konvention nutzt, z. B. positiv = Überschuss).",
         "data": {
-          "source_entity": "Entity mit PV-Erzeugungsleistung",
-          "listen_port": "HTTP-Port, auf dem gelauscht wird"
+          "source_entity": "Entity mit Überschussleistung",
+          "invert_sign": "Vorzeichen umkehren",
+          "system_name": "Angekündigter Systemname",
+          "http_port": "HTTP-Port (Solar API)",
+          "modbus_enabled": "Zusätzlich Modbus-TCP Smart Meter IP emulieren",
+          "modbus_port": "Modbus-TCP-Port",
+          "modbus_unit_id": "Modbus Unit-/Geräte-ID"
         }
       }
     },
@@ -21,8 +26,12 @@
     "step": {
       "init": {
         "data": {
-          "listen_host": "Bind-Adresse für den HTTP-Server",
-          "listen_port": "HTTP-Port, auf dem gelauscht wird"
+          "invert_sign": "Vorzeichen umkehren",
+          "system_name": "Angekündigter Systemname",
+          "http_port": "HTTP-Port (Solar API)",
+          "modbus_enabled": "Zusätzlich Modbus-TCP Smart Meter IP emulieren",
+          "modbus_port": "Modbus-TCP-Port",
+          "modbus_unit_id": "Modbus Unit-/Geräte-ID"
         }
       }
     }

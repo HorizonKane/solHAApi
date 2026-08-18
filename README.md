@@ -1,31 +1,57 @@
 # Fronius Smart Meter Emulator (Home Assistant Custom Integration)
 
-Stellt den aktuellen Wert einer bereits in Home Assistant vorhandenen
-PV-Erzeugungs-Entity (z. B. eines Template-Sensors/Helpers) über einen
-emulierten **Fronius Solar API HTTP-Server** im Netzwerk bereit. Die Fronius
-Wallbox (z. B. Flex Home 22) kann darauf wie auf einen echten Fronius
-Datamanager zugreifen und PV-geführt laden – auch ohne dass ein Fronius
-Wechselrichter vorhanden ist.
+Emuliert ein Fronius-System (Solar API über HTTP + optional Smart Meter IP
+über Modbus TCP, beides per mDNS im Netzwerk angekündigt), damit eine Fronius
+Wattpilot PV-Überschussladen gegen eine Home-Assistant-Entity durchführen
+kann – auch ohne echte Fronius-Hardware.
 
-> ⚠️ Dies ist eine inoffizielle, community-basierte Nachbildung der lokalen
-> Fronius Solar API auf Basis der öffentlich dokumentierten JSON-Struktur. Es
-> besteht keine Verbindung zu oder Unterstützung durch die Fronius
-> International GmbH. Unbedingt vor dem produktiven Einsatz mit der eigenen
-> Wallbox testen – siehe Hinweis "Bekannte Unsicherheiten" unten.
+> ⚠️ Dies ist eine inoffizielle, community-basierte Nachbildung interner
+> Fronius-Protokolle. Es besteht keine Verbindung zu oder Unterstützung durch
+> die Fronius International GmbH.
+
+**Danksagung:** Die mDNS-Ankündigung, das Modbus-Register-Layout und die
+Solar-API-Endpunkte sind portiert von
+[l2smith2/fronius-virtual-inverter](https://github.com/l2smith2/fronius-virtual-inverter)
+(MIT-Lizenz), das genau dieses Verhalten aus echtem Netzwerkverkehr
+zurückentwickelt und gegen reale Wattpilot-Hardware (Firmware 42.5) getestet
+hat. Ohne dieses Referenzprojekt wäre insbesondere die proprietäre
+"Fronius-SE" mDNS-Ankündigung (nötig, damit die Wattpilot das emulierte
+Gerät überhaupt findet) nicht zu erraten gewesen.
 
 ## Funktionsweise
 
 1. Sie wählen bei der Einrichtung eine bestehende Home-Assistant-Entity aus,
-   die die aktuelle PV-Erzeugungsleistung liefert (z. B. ein Template-Sensor,
-   der aus vorhandenen Werten berechnet wird).
+   die Ihren aktuellen **Netto-Überschusswert** liefert (Erzeugung minus
+   Hausverbrauch – nicht nur die reine PV-Erzeugung, siehe unten).
 2. Die Integration reagiert auf Zustandsänderungen dieser Entity (kein
-   Polling) und hält den Wert für einen eingebauten HTTP-Server bereit.
-3. Der HTTP-Server beantwortet Anfragen unter denselben Pfaden wie ein echter
-   Fronius Datamanager:
-   - `GET /solar_api/GetAPIVersion.cgi`
-   - `GET /solar_api/v1/GetPowerFlowRealtimeData.fcgi` (liefert `Body.Data.Site.P_PV`)
-4. Die Wallbox wird so konfiguriert, dass sie die IP der Home-Assistant-Instanz
-   (und den gewählten Port) als Datenquelle verwendet.
+   Polling) und hält den Wert für zwei parallel laufende Server bereit:
+   - **HTTP-Server**, der die Fronius Solar API v1 nachbildet
+     (`GetPowerFlowRealtimeData.fcgi` u. a.), Standardport `80`.
+   - **Modbus-TCP-Server**, der einen Fronius Smart Meter IP (SunSpec Model
+     213, Unit-ID `240`) nachbildet, Standardport `502`. Kann in den
+     Einstellungen deaktiviert werden.
+3. Beide Server kündigen sich per mDNS im lokalen Netz an, damit die Wattpilot
+   sie automatisch findet:
+   - Standard-Bonjour (`_http._tcp.local.`) über Home Assistants eigene
+     Zeroconf-Instanz.
+   - Die proprietäre Fronius-Ankündigung
+     (`_Fronius-SE-Inverter._tcp.local.` / `_Fronius-SE-SmartMeter._tcp.local.`)
+     per selbst gebauten UDP-Multicast-Paketen (da Fronius hier ein Format
+     jenseits der Standard-Zeroconf-Limits nutzt).
+
+## Vorzeichen-Konvention
+
+Fronius/SunSpec-Konvention: **negativ = Einspeisung/Überschuss, positiv =
+Bezug aus dem Netz**. Wenn Ihre Home-Assistant-Entity umgekehrt gepolt ist
+(z. B. "+3000 W Überschuss" bei Solarüberschuss, wie es sich umgangssprachlich
+anfühlt), lassen Sie die Option **"Vorzeichen umkehren"** aktiviert
+(Standardeinstellung). Falls Ihre Entity bereits die Fronius-Konvention
+verwendet, deaktivieren Sie die Option.
+
+**Wichtig:** Übermitteln Sie den **Netto-Überschuss** (Erzeugung minus
+Hausverbrauch), nicht die reine PV-Erzeugung – ein echter Fronius Smart
+Meter sitzt am Einspeisepunkt und meldet genau diesen Nettowert. Nur damit
+berücksichtigt die Wallbox Ihre Grundlast korrekt.
 
 ## Installation
 
@@ -42,37 +68,25 @@ der Home-Assistant-Konfiguration kopieren und Home Assistant neu starten.
 
 1. Einstellungen → Geräte & Dienste → Integration hinzufügen → "Fronius Smart
    Meter Emulator".
-2. Die Entity auswählen, die Ihre PV-Erzeugungsleistung enthält (Einheit `W`
-   oder `kW`, beides wird automatisch umgerechnet).
-3. HTTP-Port wählen (Standard: `8080`).
-4. Auf der Wallbox die IP der Home-Assistant-Instanz (ggf. mit Port, falls die
-   Wallbox das unterstützt) als Fronius-Datenquelle eintragen.
+2. Die Entity mit Ihrem Netto-Überschusswert auswählen.
+3. Optional: Systemname, HTTP-Port, Modbus-Emulation (an/aus), Modbus-Port
+   und -Unit-ID anpassen.
 
-Über die Optionen der Integration lassen sich Bind-Adresse und Port später
-anpassen.
+## Hinweis zu Port 80 / 502
+
+Beide Standardports sind privilegiert (< 1024) und lassen sich je nach
+Home-Assistant-Setup (Container-Rechte) nicht immer direkt binden. Falls der
+Start mit "Could not bind..." fehlschlägt: entweder Home Assistant mit
+`CAP_NET_BIND_SERVICE` betreiben, oder in den Optionen einen Port ≥ 1024
+wählen und per Portweiterleitung (Router/`iptables`) auf 80 bzw. 502
+umleiten. Die mDNS-Ankündigung transportiert den tatsächlich gewählten Port
+korrekt mit, ein abweichender Port sollte also technisch trotzdem
+funktionieren.
 
 ## Bekannte Unsicherheiten
 
-Fronius dokumentiert nicht öffentlich, wie genau die Wallbox einen
-Datamanager im lokalen Netz anspricht (z. B. ob zusätzlich zu
-`GetPowerFlowRealtimeData.fcgi` weitere Endpunkte, ein bestimmter Port oder
-eine Discovery per mDNS/UPnP erwartet werden). Diese Integration implementiert
-die zwei am häufigsten benötigten, öffentlich dokumentierten Solar-API-Aufrufe.
-
-**Falls die Wallbox den emulierten Server nicht erkennt:** Bitte den
-tatsächlichen Request der Wallbox mitschneiden (z. B. Netzwerk-Mitschnitt am
-Router, oder die Zugriffe im Home-Assistant-Log/`aiohttp`-Access-Log prüfen)
-und mir den angefragten Pfad mitteilen – dann kann der Server entsprechend
-erweitert werden.
-
-## Registerdaten, die aktuell nicht befüllt werden
-
-`P_Grid`, `P_Load`, `P_Akku`, `rel_Autonomy`, `rel_SelfConsumption` sowie die
-Energiezähler werden als `null` gemeldet, da keine entsprechende Datenquelle
-vorhanden ist. Nur `P_PV` wird aus der ausgewählten Entity befüllt.
-
-## Vor dem Veröffentlichen
-
-`manifest.json` enthält Platzhalter (`@your-github-username`,
-`github.com/your-github-username/...`) für `codeowners`/`documentation` –
-bitte vor einer Veröffentlichung durch die eigenen Angaben ersetzen.
+Weder der HTTP- noch der mDNS-Teil sind offiziell von Fronius dokumentiert.
+Sollte die Wattpilot das emulierte Gerät weiterhin nicht finden oder die
+PV-Überschusskopplung ablehnen, bitte den tatsächlichen Netzwerkverkehr der
+Wallbox mitschneiden (z. B. am Router) und mir die abweichenden Details
+mitteilen – dann lässt sich der Server gezielt nachschärfen.
